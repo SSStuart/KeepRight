@@ -1,0 +1,157 @@
+﻿using Rage;
+using Rage.Native;
+using System;
+using System.Linq;
+using System.Reflection;
+
+[assembly: Rage.Attributes.Plugin("KeepRight", Description = "Make the vehicles driving in front of you in the left lane on the highway change lanes", Author = "SSStuart", PrefersSingleInstance = true, SupportUrl = "https://ssstuart.net/discord")]
+
+namespace KeepRight
+{
+    public static class EntryPoint
+    {
+        public static string pluginName = "KeepRight";
+        public static string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+        public static Localization l10n = new Localization();
+
+        private static bool DEBUG = true;
+        private static int checkDelayMs = 2000;
+        private static int hornWeight = 0;
+        private static int lastHornWeight = 0;
+
+        public static void Main()
+        {
+            Game.LogTrivial($"{pluginName} plugin v{pluginVersion} has been loaded.");
+
+            UpdateChecker.CheckForUpdates();
+
+            Settings.LoadSettings();
+
+            float checkFrequency = 0.5f;
+            checkDelayMs = (int)(1 / checkFrequency) * 1000;
+
+            GameFiber.StartNew(delegate
+            {
+                while (true)
+                {
+                    if (Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 5)
+                    {
+                        CheckForVehicles();
+                    }
+                    lastHornWeight = hornWeight;
+                    hornWeight = 0;
+                    GameFiber.Sleep(checkDelayMs);
+                }
+            });
+            GameFiber.StartNew(delegate
+            {
+                while (true)
+                {
+                    if (Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.IsPressingHorn)
+                        hornWeight++;
+                    GameFiber.Sleep(100);
+                }
+            });
+        }
+
+        private static void CheckForVehicles()
+        {
+            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle)
+                        .Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && ent.Speed > 5 && ent.Speed <= Game.LocalPlayer.Character.Speed + 5 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).Cast<Vehicle>().ToArray();
+            foreach (Vehicle vehicle in drivingVehiclesInFront)
+            {
+                if (!vehicle.Exists() || !vehicle.HasDriver || vehicle.Metadata.isGoingRight ?? false)
+                    continue;
+
+                Vector3 nodeCheckPos = vehicle.GetOffsetPositionFront(10);
+                float targetHeading = vehicle.Heading;
+
+                NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
+                    nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
+                    out Vector3 nodePos, out float nodeHeading, 0, 3.0f, 0f);
+                NativeFunction.Natives.GET_ROAD_BOUNDARY_USING_HEADING(
+                    nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
+                    vehicle.Heading, out Vector3 roadBoundPos);
+                NativeFunction.Natives.GET_VEHICLE_NODE_PROPERTIES(
+                    nodePos.X, nodePos.Y, nodePos.Z,
+                    out int density, out int flags);
+
+                bool isOnHighway = (flags & (1 << 6)) != 0;
+                bool isHeadingSimilarPlayer = Math.Abs(targetHeading - nodeHeading) < 40;
+                bool isOnLeftSideOfRoad = vehicle.GetPositionOffset(nodePos).X > 0;
+                bool doesLaneToRightExist = Math.Sqrt(Vector3.DistanceSquared(nodeCheckPos, roadBoundPos) - Vector3.DistanceSquared(nodeCheckPos, nodePos)) > 5;
+                bool isSirenOn = Game.LocalPlayer.Character.CurrentVehicle.IsSirenOn;
+
+                float mergeChance = (60 - vehicle.DistanceTo2D(Game.LocalPlayer.Character.Position)
+                    + (!isOnHighway ? Settings.WEIGHT_NOT_HIGHWAY : 0)
+                    + (lastHornWeight * Settings.WEIGHT_HORN) 
+                    + (vehicle.IsBig ? Settings.WEIGHT_BIG_VEHICLES : 0)
+                    + (Game.LocalPlayer.Character.CurrentVehicle.Model.IsEmergencyVehicle ? Settings.WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE : 0)
+                    + (isSirenOn ? 50 : 0)) / 100;
+
+                if ((!isSirenOn || vehicle.IsBig) && isHeadingSimilarPlayer && (isOnLeftSideOfRoad || doesLaneToRightExist) && MathHelper.GetRandomSingle(0, 1) < mergeChance)
+                {
+                    GameFiber.StartNew(delegate
+                    {
+                        if (!vehicle.Exists() || !vehicle.HasDriver)
+                            return;
+
+                        vehicle.Metadata.isGoingRight = true;
+                        // Random delay to avoid triggering the lane change at a fixed frequency
+                        GameFiber.Sleep(MathHelper.GetRandomInteger(0, checkDelayMs));
+
+                        bool isRightSpaceOccupied = World.GetClosestEntity(vehicle.GetOffsetPositionRight(5), 6f, GetEntitiesFlags.ConsiderGroundVehicles) != vehicle;
+                        if (isRightSpaceOccupied)
+                        {
+                            vehicle.Metadata.isGoingRight = false;
+                            return;
+                        }
+                        float taskSpeed = Math.Max(vehicle.Speed, 8);
+                        Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, 3 * taskSpeed, 0));
+                        bool isTargetOnRoad = false;
+                        int retryNb = 0;
+                        do
+                        {
+                            targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, (3 - retryNb) * taskSpeed, 0));
+                            isTargetOnRoad = NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z, vehicle);
+                            retryNb++;
+                        }
+                        while (!isTargetOnRoad && retryNb < 3);
+                        if (!isTargetOnRoad)
+                        {
+                            vehicle.Metadata.isGoingRight = false;
+                            return;
+                        }
+                        Blip mergingVehicleBlip = null;
+                        if (DEBUG)
+                        {
+                            Game.DisplayNotification("Starting merge for " + vehicle.Model.Name);
+                            mergingVehicleBlip = new Blip(vehicle)
+                            {
+                                Sprite = BlipSprite.CarWash,
+                                Alpha = 0.5f
+                            };
+                        }
+                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition , taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, 8f).WaitForCompletion(5000);
+                        if (vehicle.Exists())
+                        {
+                            if (vehicle.HasDriver)
+                                vehicle.Driver.Tasks.Clear();
+                            vehicle.Metadata.isGoingRight = false;
+                            if (DEBUG && mergingVehicleBlip.Exists())
+                                mergingVehicleBlip.Delete();
+                        }
+                    });
+                }
+                GameFiber.Yield();
+            }
+        }
+
+        private static void OnUnload(bool variable)
+        {
+            Game.LogTrivial("Unloading...");
+
+            Game.LogTrivial("Unloaded");
+        }
+    }
+}
