@@ -14,7 +14,6 @@ namespace KeepRight
         public static string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         public static Localization l10n = new Localization();
 
-        private static bool DEBUG = Settings.DEBUG;
         private static int checkDelayMs = 2000;
         private static int hornWeight = 0;
         private static int lastHornWeight = 0;
@@ -26,6 +25,12 @@ namespace KeepRight
             UpdateChecker.CheckForUpdates();
 
             Settings.LoadSettings();
+
+            if (Settings.CHECK_FREQUENCY == 0 || Settings.CHECK_FREQUENCY > 100)
+            {
+                Game.LogTrivial("Plugin stopped! Check frequency is " + (Settings.CHECK_FREQUENCY == 0 ? "too low" : "too high"));
+                return;
+            }
 
             float checkFrequency = Settings.CHECK_FREQUENCY;
             checkDelayMs = (int)(1 / checkFrequency) * 1000;
@@ -56,7 +61,7 @@ namespace KeepRight
 
         private static void CheckForVehicles()
         {
-            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle)
+            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0))
                         .Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && ent.Speed > 5 && ent.Speed <= Game.LocalPlayer.Character.Speed + 5 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).Cast<Vehicle>().ToArray();
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
@@ -124,9 +129,9 @@ namespace KeepRight
                         }
                         Blip mergingVehicleBlip = null;
                         GameFiber drawLine = null;
-                        if (DEBUG)
+                        if (Settings.DEBUG)
                         {
-                            Game.DisplayNotification("Starting merge for " + vehicle.Model.Name);
+                            Game.DisplayNotification($"Starting merge for {vehicle.Model.Name}");
                             mergingVehicleBlip = new Blip(vehicle)
                             {
                                 Sprite = BlipSprite.CarWash,
@@ -147,9 +152,9 @@ namespace KeepRight
                             if (vehicle.HasDriver)
                                 vehicle.Driver.Tasks.Clear();
                             vehicle.Metadata.isGoingRight = false;
-                            if (DEBUG && mergingVehicleBlip.Exists())
+                            if (Settings.DEBUG && mergingVehicleBlip.Exists())
                                 mergingVehicleBlip.Delete();
-                            if (DEBUG && drawLine != null)
+                            if (Settings.DEBUG && drawLine != null)
                                 drawLine.Abort();
                         }
                     }

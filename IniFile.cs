@@ -6,6 +6,7 @@ namespace KeepRight
     {
         internal static bool DEBUG = false;
         internal static float CHECK_FREQUENCY = 0.5f;
+        internal static bool DISABLE_FOR_OTHER_EMERGENCY_VEHICLES = false;
         internal static bool ENABLE_BIG_VEHICLE_SIREN_ON = true;
         internal static float WEIGHT_HORN = 2;
         internal static int WEIGHT_BIG_VEHICLES = 20;
@@ -25,8 +26,10 @@ namespace KeepRight
 
             CHECK_FREQUENCY = (float)ini.ReadDouble("Behavior", "CheckFrequency", 0.5f);
             Game.LogTrivial($"- Frequency: {CHECK_FREQUENCY}/sec");
+            DISABLE_FOR_OTHER_EMERGENCY_VEHICLES = ini.ReadBoolean("Behavior", "DisableForOtherEmergencyVehicles", true);
+            Game.LogTrivial($"- Disable for other emergency vehicles: {(DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? "Yes" : "No")}");
             ENABLE_BIG_VEHICLE_SIREN_ON = ini.ReadBoolean("Behavior", "EnableForBigVehicleWhenSirenOn", true);
-            Game.LogTrivial($"- Enable for big vehicle when player siren is on: {ENABLE_BIG_VEHICLE_SIREN_ON}");
+            Game.LogTrivial($"- Enable for big vehicle when player siren is on: {(ENABLE_BIG_VEHICLE_SIREN_ON ? "Yes" : "No")}");
 
             WEIGHT_HORN = (float)ini.ReadDouble("Chances", "Horn", 2);
             Game.LogTrivial($"- Weight: Horn usage: {WEIGHT_HORN}");
