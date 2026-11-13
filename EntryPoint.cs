@@ -39,7 +39,7 @@ namespace KeepRight
             {
                 while (true)
                 {
-                    if (Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 5)
+                    if (Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
                     {
                         CheckForVehicles();
                     }
@@ -62,7 +62,7 @@ namespace KeepRight
         private static void CheckForVehicles()
         {
             Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0))
-                        .Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && ent.Speed > 5 && ent.Speed <= Game.LocalPlayer.Character.Speed + 5 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).Cast<Vehicle>().ToArray();
+                .Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
                 if (!vehicle.Exists() || !vehicle.HasDriver || vehicle.Metadata.isGoingRight ?? false)
@@ -111,7 +111,7 @@ namespace KeepRight
                     {
                         vehicle.Metadata.isGoingRight = true;
 
-                        float taskSpeed = Math.Max(vehicle.Speed, 8);
+                        float taskSpeed = Math.Max(vehicle.Speed, 5);
                         Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, 3 * taskSpeed, 0));
                         bool isTargetOnRoad = false;
                         int retryNb = 0;
