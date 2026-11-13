@@ -86,6 +86,10 @@ namespace KeepRight
                 {
                     // Random delay to avoid triggering the lane change at a fixed frequency
                     GameFiber.Sleep(MathHelper.GetRandomInteger(0, checkDelayMs));
+                    if (!vehicle.Exists() || !vehicle.HasDriver)
+                        return;
+
+                    vehicle.Metadata.isGoingRight = true;
 
                     NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
                        nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
@@ -110,10 +114,8 @@ namespace KeepRight
                         + (Game.LocalPlayer.Character.CurrentVehicle.Model.IsEmergencyVehicle ? Settings.WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE : 0)
                         + (isPlayerSirenOn ? 50 : 0)) / 100;
 
-                    if (vehicle.Exists() && vehicle.HasDriver && (!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightSpaceOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
+                    if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightSpaceOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {
-                        vehicle.Metadata.isGoingRight = true;
-
                         float taskSpeed = Math.Max(vehicle.Speed, 5);
                         Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, 3 * taskSpeed, 0));
                         bool isTargetOnRoad = false;
@@ -160,7 +162,8 @@ namespace KeepRight
                             if (Settings.DEBUG && drawLine != null)
                                 drawLine.Abort();
                         }
-                    }
+                    } else
+                        vehicle.Metadata.isGoingRight = false;
                 });
 
                 GameFiber.Yield();
