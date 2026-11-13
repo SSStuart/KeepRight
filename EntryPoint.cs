@@ -70,13 +70,12 @@ namespace KeepRight
                     continue;
 
                 Vector3 nodeCheckPos = vehicle.GetOffsetPositionFront(10);
-                float targetHeading = vehicle.Heading;
 
                 NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
                     nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
                     out Vector3 nodePos, out float nodeHeading, 0, 3.0f, 0f);
 
-                bool isHeadingSimilarPlayer = Math.Abs(targetHeading - nodeHeading) < 40;
+                bool isHeadingSimilarPlayer = Math.Abs(vehicle.Heading - nodeHeading) < 40;
                 bool isToTheLeftOfThePlayer = vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > 3;
 
                 if (!isHeadingSimilarPlayer || isToTheLeftOfThePlayer)
@@ -132,6 +131,14 @@ namespace KeepRight
                             vehicle.Metadata.isGoingRight = false;
                             return;
                         }
+                        NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
+                           targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z,
+                           out Vector3 targetNodePos, out float _, 0, 3.0f, 0f);
+
+                        float targetXOffset = vehicle.GetPositionOffset(nodePos).X - vehicle.GetPositionOffset(targetNodePos).X;
+                        targetRoadPosition.X -= targetXOffset;
+
+                        Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Target: {targetRoadPosition}");
                         Blip mergingVehicleBlip = null;
                         GameFiber drawLine = null;
                         if (Settings.DEBUG)
@@ -151,7 +158,7 @@ namespace KeepRight
                                 }
                             });
                         }
-                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, 8f).WaitForCompletion(5000);
+                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, 10f).WaitForCompletion(10000);
                         if (vehicle.Exists())
                         {
                             if (vehicle.HasDriver)
