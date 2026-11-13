@@ -61,8 +61,9 @@ namespace KeepRight
 
         private static void CheckForVehicles()
         {
-            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0))
-                .Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
+            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0)).Cast<Vehicle>().ToArray();
+            drivingVehiclesInFront = drivingVehiclesInFront.Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !ent.IsSirenOn && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
+            
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
                 if (!vehicle.Exists() || !vehicle.HasDriver || vehicle.Metadata.isGoingRight ?? false)
@@ -76,7 +77,9 @@ namespace KeepRight
                     out Vector3 nodePos, out float nodeHeading, 0, 3.0f, 0f);
 
                 bool isHeadingSimilarPlayer = Math.Abs(targetHeading - nodeHeading) < 40;
-                if (!isHeadingSimilarPlayer)
+                bool isToTheLeftOfThePlayer = vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > 3;
+
+                if (!isHeadingSimilarPlayer || isToTheLeftOfThePlayer)
                     continue;
 
                 GameFiber.StartNew(delegate
