@@ -45,7 +45,7 @@ namespace KeepRight
                     }
                     lastHornWeight = hornWeight;
                     hornWeight = 0;
-                    GameFiber.Sleep(checkDelayMs);
+                    GameFiber.Wait(checkDelayMs);
                 }
             });
             GameFiber.StartNew(delegate
@@ -54,7 +54,7 @@ namespace KeepRight
                 {
                     if (Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.IsPressingHorn)
                         hornWeight++;
-                    GameFiber.Sleep(100);
+                    GameFiber.Wait(100);
                 }
             });
         }
@@ -62,7 +62,7 @@ namespace KeepRight
         private static void CheckForVehicles()
         {
             Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0)).Cast<Vehicle>().ToArray();
-            drivingVehiclesInFront = drivingVehiclesInFront.Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !ent.IsSirenOn && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
+            drivingVehiclesInFront = drivingVehiclesInFront.Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !ent.IsSirenOn && (ent.HasDriver && ent.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask) && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
             
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
@@ -136,7 +136,7 @@ namespace KeepRight
                            out Vector3 targetNodePos, out float _, 0, 3.0f, 0f);
 
                         float targetXOffset = vehicle.GetPositionOffset(nodePos).X - vehicle.GetPositionOffset(targetNodePos).X;
-                        targetRoadPosition.X -= targetXOffset;
+                        targetRoadPosition.X -= MathHelper.Clamp(targetXOffset, -4, 4);
 
                         Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Target: {targetRoadPosition}");
                         Blip mergingVehicleBlip = null;
