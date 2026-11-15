@@ -62,7 +62,7 @@ namespace KeepRight
         private static void CheckForVehicles()
         {
             Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0)).Cast<Vehicle>().ToArray();
-            drivingVehiclesInFront = drivingVehiclesInFront.Where((ent) => (Vector3.DistanceSquared(ent.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !ent.IsSirenOn && (ent.HasDriver && ent.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask) && ent.Speed > 2 && ent.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(ent.Heading - Game.LocalPlayer.Character.Heading) < 40)).ToArray();
+            drivingVehiclesInFront = drivingVehiclesInFront.Where((vehicle) => (Vector3.DistanceSquared(vehicle.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !vehicle.IsSirenOn && (vehicle.HasDriver && vehicle.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask) && vehicle.Speed > 1 && vehicle.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(vehicle.Heading - Game.LocalPlayer.Character.Heading) < 40 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X < 3 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > -5)).ToArray();
             
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
@@ -75,11 +75,7 @@ namespace KeepRight
                     nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
                     out Vector3 nodePos, out float nodeHeading, 0, 3.0f, 0f);
 
-                bool isHeadingSimilarPlayer = Math.Abs(vehicle.Heading - nodeHeading) < 40;
-                bool isToTheLeftOfThePlayer = vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > 3;
-
-                if (!isHeadingSimilarPlayer || isToTheLeftOfThePlayer)
-                    continue;
+                vehicle.Metadata.isGoingRight = true;
 
                 GameFiber.StartNew(delegate
                 {
@@ -87,8 +83,6 @@ namespace KeepRight
                     GameFiber.Sleep(MathHelper.GetRandomInteger(0, checkDelayMs));
                     if (!vehicle.Exists() || !vehicle.HasDriver)
                         return;
-
-                    vehicle.Metadata.isGoingRight = true;
 
                     NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
                        nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
@@ -103,7 +97,7 @@ namespace KeepRight
                     bool isOnHighway = (flags & (1 << 6)) != 0;
                     bool isOnLeftSideOfRoad = vehicle.GetPositionOffset(nodePos).X > 0;
                     bool doesLaneToRightExist = Math.Sqrt(Vector3.DistanceSquared(nodeCheckPos, roadBoundPos) - Vector3.DistanceSquared(nodeCheckPos, nodePos)) > 5;
-                    bool isRightSpaceOccupied = World.GetClosestEntity(vehicle.GetOffsetPositionRight(5), 6f, GetEntitiesFlags.ConsiderGroundVehicles) != vehicle;
+                    bool isRightLaneOccupied = World.TraceBox(vehicle.GetOffsetPosition(new Vector3(4, 0, 0)), vehicle.Orientation, new Vector3(2, vehicle.Length + vehicle.Speed, 3), TraceFlags.IntersectVehicles, vehicle).Hit;
                     bool isPlayerSirenOn = Game.LocalPlayer.Character.CurrentVehicle.IsSirenOn;
 
                     float mergeChance = (60 - vehicle.DistanceTo2D(Game.LocalPlayer.Character.Position)
@@ -113,7 +107,7 @@ namespace KeepRight
                         + (Game.LocalPlayer.Character.CurrentVehicle.Model.IsEmergencyVehicle ? Settings.WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE : 0)
                         + (isPlayerSirenOn ? 50 : 0)) / 100;
 
-                    if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightSpaceOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
+                    if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightLaneOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {
                         float taskSpeed = Math.Max(vehicle.Speed, 5);
                         Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, 3 * taskSpeed, 0));
@@ -151,14 +145,14 @@ namespace KeepRight
                             };
                             GameFiber drawline = GameFiber.StartNew(delegate {
                                 uint endTime = Game.GameTime + 5000;
-                                while (Game.GameTime < endTime)
+                                while (Game.GameTime < endTime && vehicle.Exists())
                                 {
                                     NativeFunction.Natives.DRAW_LINE(targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z + 0.5f, vehicle.Position.X, vehicle.Position.Y, vehicle.Position.Z, 50, 50, 255, 200);
                                     GameFiber.Yield();
                                 }
                             });
                         }
-                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, 10f).WaitForCompletion(10000);
+                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, taskSpeed / 2).WaitForCompletion(10000);
                         if (vehicle.Exists())
                         {
                             if (vehicle.HasDriver)
