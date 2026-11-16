@@ -2,7 +2,7 @@
 
 A *RAGE Plugin Hook* plugin that makes vehicles in the left lane in front of the player move to the right.
 
-Available on gta5-mods.com and lcpdfr.com.
+Available on [gta5-mods.com](https://www.gta5-mods.com/scripts/keep-right) and [lcpdfr.com](https://www.lcpdfr.com/downloads/gta5mods/scripts/55899-keep-right/).
 
 
 ## Configuration
