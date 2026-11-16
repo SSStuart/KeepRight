@@ -10,7 +10,7 @@ namespace KeepRight
         private static readonly string pluginKey = "KeepRight";
         private static readonly InitializationFile updateSettings = new InitializationFile("Plugins/SSStuart_UpdateChecker.ini");
 
-        private static readonly string url = "https://ssstuart.net/api/GTAModVersion/KeepRight";
+        private static readonly string url = "https://ssstuart.net/api/GTAModVersion/Keep%20Right";
         private static readonly HttpClient httpClient = new HttpClient();
         private static Version lastVersion = null;
         private static readonly Version currentVersion = new Version(EntryPoint.pluginVersion);

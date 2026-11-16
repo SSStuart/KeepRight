@@ -61,7 +61,7 @@ namespace KeepRight
 
         private static void CheckForVehicles()
         {
-            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.DISABLE_FOR_OTHER_EMERGENCY_VEHICLES ? GetEntitiesFlags.ExcludeEmergencyVehicles : 0)).Cast<Vehicle>().ToArray();
+            Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.ENABLE_FOR_OTHER_EMERGENCY_VEHICLES ? 0 : GetEntitiesFlags.ExcludeEmergencyVehicles)).Cast<Vehicle>().ToArray();
             drivingVehiclesInFront = drivingVehiclesInFront.Where((vehicle) => (Vector3.DistanceSquared(vehicle.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !vehicle.IsSirenOn && (vehicle.HasDriver && vehicle.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask) && vehicle.Speed > 1 && vehicle.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(vehicle.Heading - Game.LocalPlayer.Character.Heading) < 40 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X < 3 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > -5)).ToArray();
             
             foreach (Vehicle vehicle in drivingVehiclesInFront)
