@@ -79,11 +79,11 @@ namespace KeepRight
         private static void CheckForVehicles()
         {
             Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.ENABLE_FOR_OTHER_EMERGENCY_VEHICLES ? 0 : GetEntitiesFlags.ExcludeEmergencyVehicles)).Cast<Vehicle>().ToArray();
-            drivingVehiclesInFront = drivingVehiclesInFront.Where((vehicle) => (Vector3.DistanceSquared(vehicle.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40 && !vehicle.IsSirenOn && (vehicle.HasDriver && vehicle.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask) && vehicle.Speed > 1 && vehicle.Speed <= Game.LocalPlayer.Character.Speed + 2 && Math.Abs(vehicle.Heading - Game.LocalPlayer.Character.Heading) < 40 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X < 3 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > -5)).ToArray();
+            drivingVehiclesInFront = drivingVehiclesInFront.Where((vehicle) => DoesVehicleMeetCriteria(vehicle)).ToArray();
             
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
-                if (!vehicle.Exists() || !vehicle.HasDriver || vehicle.Metadata.isGoingRight ?? false)
+                if (!vehicle.Exists() || !vehicle.HasDriver)
                     continue;
 
                 Vector3 nodeCheckPos = vehicle.GetOffsetPositionFront(10);
@@ -92,13 +92,13 @@ namespace KeepRight
                     nodeCheckPos.X, nodeCheckPos.Y, nodeCheckPos.Z,
                     out Vector3 nodePos, out float nodeHeading, 0, 3.0f, 0f);
 
-                vehicle.Metadata.isGoingRight = true;
+                vehicle.Metadata.KR_isGoingRight = true;
 
                 GameFiber.StartNew(delegate
                 {
                     // Random delay to avoid triggering the lane change at a fixed frequency
                     GameFiber.Sleep(MathHelper.GetRandomInteger(0, checkDelayMs));
-                    if (!vehicle.Exists() || !vehicle.HasDriver)
+                    if (!DoesVehicleMeetCriteria(vehicle))
                         return;
 
                     NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
@@ -147,10 +147,7 @@ namespace KeepRight
                         }
                         while (!isTargetOnRoad && retryNb < 3);
                         if (!isTargetOnRoad)
-                        {
-                            vehicle.Metadata.isGoingRight = false;
                             return;
-                        }
                         NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
                            targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z,
                            out Vector3 targetNodePos, out float _, 0, 3.0f, 0f);
@@ -158,7 +155,7 @@ namespace KeepRight
                         float targetXOffset = vehicle.GetPositionOffset(nodePos).X - vehicle.GetPositionOffset(targetNodePos).X;
                         targetRoadPosition.X -= MathHelper.Clamp(targetXOffset, -4, 4);
 
-                        Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Target: {targetRoadPosition}");
+                        Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Speed: {vehicle.Speed} - Target: {targetRoadPosition}");
                         Blip mergingVehicleBlip = null;
                         GameFiber drawLine = null;
                         if (Settings.DEBUG)
@@ -169,7 +166,8 @@ namespace KeepRight
                                 Sprite = BlipSprite.CarWash,
                                 Alpha = 0.5f
                             };
-                            GameFiber drawline = GameFiber.StartNew(delegate {
+                            drawLine = GameFiber.StartNew(delegate
+                            {
                                 uint endTime = Game.GameTime + 5000;
                                 while (Game.GameTime < endTime && vehicle.Exists())
                                 {
@@ -178,23 +176,49 @@ namespace KeepRight
                                 }
                             });
                         }
-                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic, taskSpeed / 2).WaitForCompletion(10000);
+
+                        vehicle.Driver.Tasks.DriveToPosition(targetRoadPosition, taskSpeed, VehicleDrivingFlags.DriveAroundObjects | VehicleDrivingFlags.DriveAroundPeds | VehicleDrivingFlags.DriveAroundVehicles | VehicleDrivingFlags.IgnorePathFinding | VehicleDrivingFlags.FollowTraffic | VehicleDrivingFlags.RespectIntersections, 3);
+                        uint taskTimeout = Game.GameTime + 10000;
+                        while (Vector3.DistanceSquared(vehicle.Position, targetRoadPosition) > 10 * 10)
+                        {
+                            GameFiber.Sleep(100);
+                        }
                         if (vehicle.Exists())
                         {
                             if (vehicle.HasDriver)
                                 vehicle.Driver.Tasks.Clear();
-                            vehicle.Metadata.isGoingRight = false;
                             if (Settings.DEBUG && mergingVehicleBlip.Exists())
                                 mergingVehicleBlip.Delete();
                             if (Settings.DEBUG && drawLine != null)
                                 drawLine.Abort();
                         }
-                    } else
-                        vehicle.Metadata.isGoingRight = false;
+                    }
                 });
+
+                if (vehicle.Exists())
+                    vehicle.Metadata.KR_isGoingRight = false;
 
                 GameFiber.Yield();
             }
+        }
+
+        private static bool DoesVehicleMeetCriteria(Vehicle vehicle)
+        {
+            bool isVehicleValid = vehicle.Exists() && vehicle.HasDriver;
+            bool isVehicleAlreadyChangingOrTimedOut = vehicle.Metadata.KR_isGoingRight ?? false || (vehicle.Metadata.KR_timeout ?? Game.GameTime - 1000) > Game.GameTime;
+            if (isVehicleAlreadyChangingOrTimedOut && vehicle == targetedVeh)
+                Game.LogTrivial($"{vehicle.Model.Name} !Crit: already changing/timed out {vehicle.Metadata.KR_isGoingRight} - {(vehicle.Metadata.KR_timeout ?? Game.GameTime - 1000) > Game.GameTime}");
+            bool isVehicleInFrontOfPlayer = Vector3.DistanceSquared(vehicle.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40;
+            bool isDriverTaskFree = vehicle.HasDriver && vehicle.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask;
+            if (!isDriverTaskFree && vehicle == targetedVeh)
+                Game.LogTrivial($"{vehicle.Model.Name} !Crit: has task");
+            bool isVehicleDrivingFastEnough = vehicle.Speed > 3 && vehicle.Speed <= Game.LocalPlayer.Character.Speed + 4;
+            if (!isVehicleDrivingFastEnough && vehicle == targetedVeh)
+                Game.LogTrivial($"{vehicle.Model.Name} !Crit: too slow ({vehicle.Speed} - max: {Game.LocalPlayer.Character.Speed + 4})");
+            bool isVehicleHeadingSimilarToPlayer = Math.Abs(vehicle.Heading - Game.LocalPlayer.Character.Heading) < 40;
+            bool isPlayerJustBehindVehicle = vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X < 3 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > -5;
+
+            return isVehicleValid && !isVehicleAlreadyChangingOrTimedOut && isVehicleInFrontOfPlayer && isDriverTaskFree && isVehicleDrivingFastEnough && isVehicleHeadingSimilarToPlayer && isPlayerJustBehindVehicle && !vehicle.IsSirenOn;
         }
 
         private static void OnUnload(bool variable)

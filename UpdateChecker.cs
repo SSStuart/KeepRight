@@ -108,13 +108,15 @@ namespace KeepRight
                     {
                         Game.LogTrivial($"Update available ! Current version: {currentVersion}, Latest version: {lastVersion}");
                         return "yes";
-                    } else if (currentVersion >= lastVersion)
+                    }
+                    else if (currentVersion >= lastVersion)
                     {
                         Game.LogTrivial($"You are using the latest version ({currentVersion}).");
                         return "no";
                     }
-                    
-                } else
+
+                }
+                else
                 {
                     Game.LogTrivial($"Update check failed: Could not parse version from response : {responseMessage}");
                     return "error";
