@@ -10,6 +10,7 @@ namespace KeepRight
         internal static Keys CHECK_KEY = Keys.None;
         internal static bool ENABLE_FOR_OTHER_EMERGENCY_VEHICLES = true;
         internal static bool ENABLE_BIG_VEHICLE_SIREN_ON = true;
+        internal static bool ACCELERATE_IF_CANT_CHANGE_LANES = true;
         internal static float WEIGHT_HORN = 2;
         internal static int WEIGHT_BIG_VEHICLES = 20;
         internal static int WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE = 20;
@@ -37,6 +38,8 @@ namespace KeepRight
             Game.LogTrivial($"- Enable for other emergency vehicles: {(ENABLE_FOR_OTHER_EMERGENCY_VEHICLES ? "Yes" : "No")}");
             ENABLE_BIG_VEHICLE_SIREN_ON = ini.ReadBoolean("Behavior", "EnableForBigVehicleWhenSirenOn", true);
             Game.LogTrivial($"- Enable for big vehicle when player siren is on: {(ENABLE_BIG_VEHICLE_SIREN_ON ? "Yes" : "No")}");
+            ACCELERATE_IF_CANT_CHANGE_LANES = ini.ReadBoolean("Behavior", "AccelerateIfCantChangeLanes", true);
+            Game.LogTrivial($"- Accelerate if vehicle can't change lanes: {(ACCELERATE_IF_CANT_CHANGE_LANES ? "Yes" : "No")}");
 
             WEIGHT_HORN = (float)ini.ReadDouble("Chances", "Horn", 2);
             Game.LogTrivial($"- Weight: Horn usage: {WEIGHT_HORN}");

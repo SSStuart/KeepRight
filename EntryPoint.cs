@@ -115,6 +115,14 @@ namespace KeepRight
                     bool isOnLeftSideOfRoad = vehicle.GetPositionOffset(nodePos).X > 0;
                     bool doesLaneToRightExist = Math.Sqrt(Vector3.DistanceSquared(nodeCheckPos, roadBoundPos) - Vector3.DistanceSquared(nodeCheckPos, nodePos)) > 5;
                     bool isRightLaneOccupied = World.TraceBox(vehicle.GetOffsetPosition(new Vector3(4, 0, 0)), vehicle.Orientation, new Vector3(2, vehicle.Length + vehicle.Speed, 3), TraceFlags.IntersectVehicles, vehicle).Hit;
+                    if (isRightLaneOccupied && Settings.ACCELERATE_IF_CANT_CHANGE_LANES)
+                    {
+                        vehicle.Metadata.KR_timeout = Game.GameTime + 5000;
+                        vehicle.Driver.Tasks.PerformDrivingManeuver(VehicleManeuver.GoForwardStraightHalfAcceleration).WaitForCompletion(100); // Seems needed for CruiseWithVehicle to take effect
+                        vehicle.Driver.Tasks.CruiseWithVehicle(vehicle.Speed + 3f).WaitForCompletion(5000);
+                        vehicle.Driver.Tasks.Clear();
+                    }
+
                     bool isPlayerSirenOn = Game.LocalPlayer.Character.CurrentVehicle.IsSirenOn;
 
                     float mergeChance = (60 - vehicle.DistanceTo2D(Game.LocalPlayer.Character.Position)
