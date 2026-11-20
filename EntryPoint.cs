@@ -111,9 +111,16 @@ namespace KeepRight
                         nodePos.X, nodePos.Y, nodePos.Z,
                         out int _, out int flags);
 
+                    bool isInJunction = (flags & (1 << 7)) != 0;
+                    if (isInJunction)
+                    {
+                        vehicle.Metadata.KR_timeout = Game.GameTime + 5000;
+                        return;
+                    }
                     bool isOnHighway = (flags & (1 << 6)) != 0;
                     bool isOnLeftSideOfRoad = vehicle.GetPositionOffset(nodePos).X > 0;
-                    bool doesLaneToRightExist = Math.Sqrt(Vector3.DistanceSquared(nodeCheckPos, roadBoundPos) - Vector3.DistanceSquared(nodeCheckPos, nodePos)) > 5;
+                    bool doesLaneToRightExist = vehicle.GetPositionOffset(roadBoundPos).X > 5;
+
                     bool isRightLaneOccupied = World.TraceBox(vehicle.GetOffsetPosition(new Vector3(4, 0, 0)), vehicle.Orientation, new Vector3(2, vehicle.Length + vehicle.Speed, 3), TraceFlags.IntersectVehicles, vehicle).Hit;
                     if (isRightLaneOccupied && Settings.ACCELERATE_IF_CANT_CHANGE_LANES)
                     {
@@ -136,24 +143,28 @@ namespace KeepRight
                     if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightLaneOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {
                         float taskSpeed = Math.Max(vehicle.Speed, 5);
-                        Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, 3 * taskSpeed, 0));
+                        Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(isOnHighway ? 5 : 4, 3 * taskSpeed, 0));
+                        Vector3 turnCheckPosition = vehicle.GetOffsetPositionFront(20);
+                        NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
+                           turnCheckPosition.X, turnCheckPosition.Y, turnCheckPosition.Z,
+                           out Vector3 targetNodePos, out float turnCheckHeading, 0, 3.0f, 0f);
+                        if (Math.Abs(vehicle.Heading - turnCheckHeading) > 20)
+                            return;
+
+                        float targetXOffset = vehicle.GetPositionOffset(targetNodePos).X - vehicle.GetPositionOffset(nodePos).X;
+                        targetRoadPosition.X -= MathHelper.Clamp(targetXOffset, -4, 4);
+
                         bool isTargetOnRoad = false;
                         int retryNb = 0;
                         do
                         {
-                            targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(5, (3 - retryNb) * taskSpeed, 0));
+                            targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(isOnHighway ? 5 : 4, (3 - retryNb) * taskSpeed, 0));
                             isTargetOnRoad = NativeFunction.Natives.IS_POINT_ON_ROAD<bool>(targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z, vehicle);
                             retryNb++;
                         }
                         while (!isTargetOnRoad && retryNb < 3);
                         if (!isTargetOnRoad)
                             return;
-                        NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
-                           targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z,
-                           out Vector3 targetNodePos, out float _, 0, 3.0f, 0f);
-
-                        float targetXOffset = vehicle.GetPositionOffset(nodePos).X - vehicle.GetPositionOffset(targetNodePos).X;
-                        targetRoadPosition.X -= MathHelper.Clamp(targetXOffset, -4, 4);
 
                         Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Speed: {vehicle.Speed} - Target: {targetRoadPosition}");
                         Blip mergingVehicleBlip = null;
