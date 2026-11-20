@@ -3,6 +3,7 @@ using Rage.Native;
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Windows.Forms;
 
 [assembly: Rage.Attributes.Plugin("KeepRight", Description = "Make the vehicles driving in front of you in the left lane on the highway change lanes", Author = "SSStuart", PrefersSingleInstance = true, SupportUrl = "https://ssstuart.net/discord")]
 
@@ -26,14 +27,28 @@ namespace KeepRight
 
             Settings.LoadSettings();
 
+            float checkFrequency = Settings.CHECK_KEY == Keys.None ? Settings.CHECK_FREQUENCY : 2;
+            checkDelayMs = (int)(1 / checkFrequency) * 1000;
+
+            if (Settings.CHECK_KEY != Keys.None)
+            {
+                GameFiber.StartNew(delegate
+                {
+                    while (true)
+                    {
+                        if (Game.IsKeyDown(Settings.CHECK_KEY) && Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
+                            CheckForVehicles();
+                        GameFiber.Yield();
+                    }
+                });
+            }
+            else
+            {
             if (Settings.CHECK_FREQUENCY == 0 || Settings.CHECK_FREQUENCY > 100)
             {
                 Game.LogTrivial("Plugin stopped! Check frequency is " + (Settings.CHECK_FREQUENCY == 0 ? "too low" : "too high"));
                 return;
             }
-
-            float checkFrequency = Settings.CHECK_FREQUENCY;
-            checkDelayMs = (int)(1 / checkFrequency) * 1000;
 
             GameFiber.StartNew(delegate
             {
@@ -48,6 +63,7 @@ namespace KeepRight
                     GameFiber.Wait(checkDelayMs);
                 }
             });
+
             GameFiber.StartNew(delegate
             {
                 while (true)
@@ -57,6 +73,7 @@ namespace KeepRight
                     GameFiber.Wait(100);
                 }
             });
+        }
         }
 
         private static void CheckForVehicles()
@@ -105,7 +122,8 @@ namespace KeepRight
                         + (lastHornWeight * Settings.WEIGHT_HORN)
                         + (vehicle.IsBig ? Settings.WEIGHT_BIG_VEHICLES : 0)
                         + (Game.LocalPlayer.Character.CurrentVehicle.Model.IsEmergencyVehicle ? Settings.WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE : 0)
-                        + (isPlayerSirenOn ? 50 : 0)) / 100;
+                        + (isPlayerSirenOn ? 50 : 0)
+                        + (Settings.CHECK_KEY != Keys.None ? Settings.WEIGHT_KEY : 0)) / 100;
 
                     if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightLaneOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {
