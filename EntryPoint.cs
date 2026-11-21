@@ -166,6 +166,17 @@ namespace KeepRight
                         if (!isTargetOnRoad)
                             return;
 
+                        NativeFunction.Natives.GET_VEHICLE_NODE_PROPERTIES(
+                            targetRoadPosition.X, targetRoadPosition.Y, targetRoadPosition.Z,
+                            out int _, out flags);
+
+                        isInJunction = (flags & (1 << 7)) != 0;
+                        if (isInJunction)
+                        {
+                            vehicle.Metadata.KR_timeout = Game.GameTime + 5000;
+                            return;
+                        }
+
                         Game.LogTrivial($"Starting lane change for {vehicle.Model.Name}. Current heading: {vehicle.Heading} - Speed: {vehicle.Speed} - Target: {targetRoadPosition}");
                         Blip mergingVehicleBlip = null;
                         GameFiber drawLine = null;
