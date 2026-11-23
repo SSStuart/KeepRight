@@ -15,6 +15,7 @@ namespace KeepRight
         public static string pluginVersion = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         public static Localization l10n = new Localization();
 
+        private static bool isKeyButtonDefined = false;
         private static int checkDelayMs = 2000;
         private static int hornWeight = 0;
         private static int lastHornWeight = 0;
@@ -27,16 +28,19 @@ namespace KeepRight
 
             Settings.LoadSettings();
 
-            float checkFrequency = Settings.CHECK_KEY == Keys.None ? Settings.CHECK_FREQUENCY : 2;
+            isKeyButtonDefined = Settings.CHECK_KEY != Keys.None || Settings.CHECK_CONT_BUTTON != ControllerButtons.None;
+
+            float checkFrequency = !isKeyButtonDefined ? Settings.CHECK_FREQUENCY : 2;
             checkDelayMs = (int)(1 / checkFrequency) * 1000;
 
-            if (Settings.CHECK_KEY != Keys.None)
+            if (isKeyButtonDefined)
             {
                 GameFiber.StartNew(delegate
                 {
                     while (true)
                     {
-                        if (Game.IsKeyDown(Settings.CHECK_KEY) && Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
+                        if (((Settings.CHECK_KEY != Keys.None && Game.IsKeyDown(Settings.CHECK_KEY)) || (Settings.CHECK_CONT_BUTTON != ControllerButtons.None && Game.IsControllerButtonDown(Settings.CHECK_CONT_BUTTON))) 
+                            && Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
                             CheckForVehicles();
                         GameFiber.Yield();
                     }
@@ -138,7 +142,7 @@ namespace KeepRight
                         + (vehicle.IsBig ? Settings.WEIGHT_BIG_VEHICLES : 0)
                         + (Game.LocalPlayer.Character.CurrentVehicle.Model.IsEmergencyVehicle ? Settings.WEIGHT_PLAYER_IN_EMERGENCY_VEHICLE : 0)
                         + (isPlayerSirenOn ? 50 : 0)
-                        + (Settings.CHECK_KEY != Keys.None ? Settings.WEIGHT_KEY : 0)) / 100;
+                        + (isKeyButtonDefined ? Settings.WEIGHT_KEY : 0)) / 100;
 
                     if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightLaneOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {

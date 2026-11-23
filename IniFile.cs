@@ -1,4 +1,5 @@
 ﻿using Rage;
+using System;
 using System.Windows.Forms;
 
 namespace KeepRight
@@ -8,6 +9,7 @@ namespace KeepRight
         internal static bool DEBUG = false;
         internal static float CHECK_FREQUENCY = 0.5f;
         internal static Keys CHECK_KEY = Keys.None;
+        internal static ControllerButtons CHECK_CONT_BUTTON = ControllerButtons.None;
         internal static bool ENABLE_FOR_OTHER_EMERGENCY_VEHICLES = true;
         internal static bool ENABLE_BIG_VEHICLE_SIREN_ON = true;
         internal static bool ACCELERATE_IF_CANT_CHANGE_LANES = true;
@@ -34,6 +36,8 @@ namespace KeepRight
             Game.LogTrivial($"- Frequency: {CHECK_FREQUENCY}/sec");
             CHECK_KEY = (Keys)parseKey.ConvertFromString(ini.ReadString("Behavior", "CheckOnKey", "None"));
             Game.LogTrivial($"- Trigger key: {CHECK_KEY}");
+            CHECK_CONT_BUTTON = Enum.TryParse<ControllerButtons>(ini.ReadString("Behavior", "CheckOnButton", "None"), true, out var parsedSelectButton) ? parsedSelectButton : CHECK_CONT_BUTTON;
+            Game.LogTrivial($"- Trigger controller button: {CHECK_CONT_BUTTON}");
             ENABLE_FOR_OTHER_EMERGENCY_VEHICLES = ini.ReadBoolean("Behavior", "EnableForOtherEmergencyVehicles", true);
             Game.LogTrivial($"- Enable for other emergency vehicles: {(ENABLE_FOR_OTHER_EMERGENCY_VEHICLES ? "Yes" : "No")}");
             ENABLE_BIG_VEHICLE_SIREN_ON = ini.ReadBoolean("Behavior", "EnableForBigVehicleWhenSirenOn", true);
