@@ -48,43 +48,43 @@ namespace KeepRight
             }
             else
             {
-            if (Settings.CHECK_FREQUENCY == 0 || Settings.CHECK_FREQUENCY > 100)
-            {
-                Game.LogTrivial("Plugin stopped! Check frequency is " + (Settings.CHECK_FREQUENCY == 0 ? "too low" : "too high"));
-                return;
-            }
-
-            GameFiber.StartNew(delegate
-            {
-                while (true)
+                if (Settings.CHECK_FREQUENCY == 0 || Settings.CHECK_FREQUENCY > 100)
                 {
-                    if (Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
+                    Game.LogTrivial("Plugin stopped! Check frequency is " + (Settings.CHECK_FREQUENCY == 0 ? "too low" : "too high"));
+                    return;
+                }
+
+                GameFiber.StartNew(delegate
+                {
+                    while (true)
                     {
-                        CheckForVehicles();
+                        if (Game.LocalPlayer.Character.Exists() && Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.Character.CurrentVehicle.Speed > 2)
+                        {
+                            CheckForVehicles();
+                        }
+                        lastHornWeight = hornWeight;
+                        hornWeight = 0;
+                        GameFiber.Wait(checkDelayMs);
                     }
-                    lastHornWeight = hornWeight;
-                    hornWeight = 0;
-                    GameFiber.Wait(checkDelayMs);
-                }
-            });
+                });
 
-            GameFiber.StartNew(delegate
-            {
-                while (true)
+                GameFiber.StartNew(delegate
                 {
-                    if (Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.IsPressingHorn)
-                        hornWeight++;
-                    GameFiber.Wait(100);
-                }
-            });
-        }
+                    while (true)
+                    {
+                        if (Game.LocalPlayer.Character.IsInAnyVehicle(false) && Game.LocalPlayer.IsPressingHorn)
+                            hornWeight++;
+                        GameFiber.Wait(100);
+                    }
+                });
+            }
         }
 
         private static void CheckForVehicles()
         {
             Vehicle[] drivingVehiclesInFront = World.GetEntities(GetEntitiesFlags.ConsiderGroundVehicles | GetEntitiesFlags.ExcludeEmptyVehicles | GetEntitiesFlags.ExcludePlayerVehicle | (Settings.ENABLE_FOR_OTHER_EMERGENCY_VEHICLES ? 0 : GetEntitiesFlags.ExcludeEmergencyVehicles)).Cast<Vehicle>().ToArray();
             drivingVehiclesInFront = drivingVehiclesInFront.Where((vehicle) => DoesVehicleMeetCriteria(vehicle)).ToArray();
-            
+
             foreach (Vehicle vehicle in drivingVehiclesInFront)
             {
                 if (!vehicle.Exists() || !vehicle.HasDriver)
@@ -147,7 +147,7 @@ namespace KeepRight
                     if ((!isPlayerSirenOn || (Settings.ENABLE_BIG_VEHICLE_SIREN_ON && vehicle.IsBig)) && (isOnLeftSideOfRoad || doesLaneToRightExist) && !isRightLaneOccupied && MathHelper.GetRandomSingle(0, 1) < mergeChance)
                     {
                         float taskSpeed = Math.Max(vehicle.Speed, 5);
-                        Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(isOnHighway ? 5 : 4, 3 * taskSpeed, 0));
+                        Vector3 targetRoadPosition = vehicle.GetOffsetPosition(new Vector3(isOnHighway ? 5 : 4, 5 + 3 * taskSpeed, 0));
                         Vector3 turnCheckPosition = vehicle.GetOffsetPositionFront(20);
                         NativeFunction.Natives.GET_CLOSEST_VEHICLE_NODE_WITH_HEADING(
                            turnCheckPosition.X, turnCheckPosition.Y, turnCheckPosition.Z,
@@ -232,15 +232,9 @@ namespace KeepRight
         {
             bool isVehicleValid = vehicle.Exists() && vehicle.HasDriver;
             bool isVehicleAlreadyChangingOrTimedOut = vehicle.Metadata.KR_isGoingRight ?? false || (vehicle.Metadata.KR_timeout ?? Game.GameTime - 1000) > Game.GameTime;
-            if (isVehicleAlreadyChangingOrTimedOut && vehicle == targetedVeh)
-                Game.LogTrivial($"{vehicle.Model.Name} !Crit: already changing/timed out {vehicle.Metadata.KR_isGoingRight} - {(vehicle.Metadata.KR_timeout ?? Game.GameTime - 1000) > Game.GameTime}");
             bool isVehicleInFrontOfPlayer = Vector3.DistanceSquared(vehicle.Position, Game.LocalPlayer.Character.GetOffsetPositionFront(40)) < 40 * 40;
             bool isDriverTaskFree = vehicle.HasDriver && vehicle.Driver.Tasks.CurrentTaskStatus == TaskStatus.NoTask;
-            if (!isDriverTaskFree && vehicle == targetedVeh)
-                Game.LogTrivial($"{vehicle.Model.Name} !Crit: has task");
             bool isVehicleDrivingFastEnough = vehicle.Speed > 3 && vehicle.Speed <= Game.LocalPlayer.Character.Speed + 4;
-            if (!isVehicleDrivingFastEnough && vehicle == targetedVeh)
-                Game.LogTrivial($"{vehicle.Model.Name} !Crit: too slow ({vehicle.Speed} - max: {Game.LocalPlayer.Character.Speed + 4})");
             bool isVehicleHeadingSimilarToPlayer = Math.Abs(vehicle.Heading - Game.LocalPlayer.Character.Heading) < 40;
             bool isPlayerJustBehindVehicle = vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X < 3 && vehicle.GetPositionOffset(Game.LocalPlayer.Character.Position).X > -5;
 
